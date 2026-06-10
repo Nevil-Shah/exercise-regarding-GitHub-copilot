@@ -39,6 +39,43 @@ activities = {
         "max_participants": 30,
         "participants": ["john@mergington.edu", "olivia@mergington.edu"]
     }
+    ,
+    "Soccer Club": {
+        "description": "Outdoor soccer practices and matches",
+        "schedule": "Wednesdays and Saturdays, 4:00 PM - 6:00 PM",
+        "max_participants": 22,
+        "participants": []
+    },
+    "Basketball Team": {
+        "description": "Competitive basketball training and games",
+        "schedule": "Tuesdays and Thursdays, 5:00 PM - 7:00 PM",
+        "max_participants": 15,
+        "participants": []
+    },
+    "Art Club": {
+        "description": "Painting, drawing, and mixed media workshops",
+        "schedule": "Mondays, 3:30 PM - 5:00 PM",
+        "max_participants": 18,
+        "participants": []
+    },
+    "Drama Club": {
+        "description": "Acting, stagecraft, and school productions",
+        "schedule": "Fridays, 4:00 PM - 6:30 PM",
+        "max_participants": 25,
+        "participants": []
+    },
+    "Debate Team": {
+        "description": "Argue current topics and build public speaking skills",
+        "schedule": "Thursdays, 3:30 PM - 5:00 PM",
+        "max_participants": 20,
+        "participants": []
+    },
+    "Robotics Club": {
+        "description": "Design and build robots for competitions",
+        "schedule": "Saturdays, 9:00 AM - 12:00 PM",
+        "max_participants": 12,
+        "participants": []
+    }
 }
 
 
@@ -62,6 +99,19 @@ def signup_for_activity(activity_name: str, email: str):
     # Get the specific activity
     activity = activities[activity_name]
 
-    # Add student
-    activity["participants"].append(email)
-    return {"message": f"Signed up {email} for {activity_name}"}
+    # Normalize and validate email
+    normalized_email = email.strip().lower()
+
+    # Prevent duplicate registrations
+    existing = [p.strip().lower() for p in activity.get("participants", [])]
+    if normalized_email in existing:
+        raise HTTPException(status_code=400, detail="Student already registered for this activity")
+
+    # Enforce max participants if configured
+    max_p = activity.get("max_participants")
+    if isinstance(max_p, int) and len(existing) >= max_p:
+        raise HTTPException(status_code=400, detail="Activity is full")
+
+    # Add student (store normalized email)
+    activity.setdefault("participants", []).append(normalized_email)
+    return {"message": f"Signed up {normalized_email} for {activity_name}"}
