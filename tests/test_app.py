@@ -2,9 +2,10 @@
 Backend tests for Mergington High School Activities API using AAA pattern.
 """
 import importlib
+import json
 
-import httpx
 import pytest
+from starlette.testclient import TestClient
 
 import src.app as app_module
 
@@ -19,7 +20,7 @@ def reload_app_module():
 @pytest.fixture
 def client():
     """Create a test client for the FastAPI app."""
-    return httpx.Client(app=app_module.app, base_url="http://testserver")
+    return TestClient(app_module.app)
 
 
 class TestGetActivities:
@@ -138,7 +139,11 @@ class TestRemoveParticipant:
         payload = {"email": "emma@mergington.edu"}
         
         # Act: Send DELETE request
-        response = client.delete(f"/activities/{activity_name}/participants", json=payload)
+        response = client.request(
+            "DELETE",
+            f"/activities/{activity_name}/participants",
+            json=payload
+        )
         
         # Assert: Verify success
         assert response.status_code == 200
@@ -155,7 +160,11 @@ class TestRemoveParticipant:
         payload = {"email": "notinactivity@mergington.edu"}
         
         # Act: Send DELETE request
-        response = client.delete(f"/activities/{activity_name}/participants", json=payload)
+        response = client.request(
+            "DELETE",
+            f"/activities/{activity_name}/participants",
+            json=payload
+        )
         
         # Assert: Verify 404 error
         assert response.status_code == 404
@@ -168,7 +177,11 @@ class TestRemoveParticipant:
         payload = {"email": "test@mergington.edu"}
         
         # Act: Send DELETE request
-        response = client.delete(f"/activities/{activity_name}/participants", json=payload)
+        response = client.request(
+            "DELETE",
+            f"/activities/{activity_name}/participants",
+            json=payload
+        )
         
         # Assert: Verify 404 error
         assert response.status_code == 404
