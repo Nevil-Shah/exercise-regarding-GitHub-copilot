@@ -8,8 +8,12 @@ for extracurricular activities at Mergington High School.
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, field_validator
 import os
+import re
+import socket
 from pathlib import Path
+import uvicorn
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -18,6 +22,17 @@ app = FastAPI(title="Mergington High School API",
 current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
+
+class ParticipantRequest(BaseModel):
+    email: str
+
+    @field_validator('email')
+    def validate_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        pattern = r'^[^@\s]+@[^@\s]+\.[^@\s]+$'
+        if not re.match(pattern, value):
+            raise ValueError('Invalid email format')
+        return value
 
 # In-memory activity database
 activities = {
@@ -89,29 +104,55 @@ def get_activities():
     return activities
 
 
-@app.post("/activities/{activity_name}/signup")
-def signup_for_activity(activity_name: str, email: str):
-    """Sign up a student for an activity"""
-    # Validate activity exists
-    if activity_name not in activities:
+def get_activity(activity_name: str):
+    if not activity_name or activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
+    return activities[activity_name]
 
-    # Get the specific activity
-    activity = activities[activity_name]
 
-    # Normalize and validate email
-    normalized_email = email.strip().lower()
-
-    # Prevent duplicate registrations
+@app.post("/activities/{activity_name}/signup")
+def signup_for_activity(activity_name: str, payload: ParticipantRequest):
+    """Sign up a student for an activity"""
+    activity = get_activity(activity_name)
+    normalized_email = payload.email.strip().lower()
     existing = [p.strip().lower() for p in activity.get("participants", [])]
+
     if normalized_email in existing:
         raise HTTPException(status_code=400, detail="Student already registered for this activity")
 
-    # Enforce max participants if configured
     max_p = activity.get("max_participants")
     if isinstance(max_p, int) and len(existing) >= max_p:
         raise HTTPException(status_code=400, detail="Activity is full")
 
-    # Add student (store normalized email)
     activity.setdefault("participants", []).append(normalized_email)
     return {"message": f"Signed up {normalized_email} for {activity_name}"}
+
+
+@app.delete("/activities/{activity_name}/participants")
+def remove_participant(activity_name: str, payload: ParticipantRequest):
+    """Unregister a student from an activity"""
+    activity = get_activity(activity_name)
+    normalized_email = payload.email.strip().lower()
+    existing = [p.strip().lower() for p in activity.get("participants", [])]
+
+    if normalized_email not in existing:
+        raise HTTPException(status_code=404, detail="Participant not found in activity")
+
+    activity["participants"] = [p for p in activity.get("participants", []) if p.strip().lower() != normalized_email]
+    return {"message": f"Removed {normalized_email} from {activity_name}"}
+
+
+def find_available_port(start_port: int = 8000, max_port: int = 8100) -> int:
+    for port in range(start_port, max_port + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if sock.connect_ex(("0.0.0.0", port)) != 0:
+                return port
+    raise RuntimeError(f"No available port found in range {start_port}-{max_port}")
+
+
+if __name__ == "__main__":
+    port = find_available_port(8000, 8100)
+    if port != 8000:
+        print(f"Port 8000 is busy, starting on port {port} instead.")
+    uvicorn.run(app, host="0.0.0.0", port=port)
